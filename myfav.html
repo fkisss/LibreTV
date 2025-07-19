@@ -69,31 +69,7 @@ const myFavApis = [
     name: '电影天堂',
     type_id: '34',
     type_name: '爱情片'
-  },
-  {
-    api: 'http://ffzy5.tv/api.php/provide/vod',
-    name: '非凡资源',
-    type_id: '34',
-    type_name: '爱情片'
-  },
-  {
-    api: 'https://360zy.com/api.php/provide/vod',
-    name: '360',
-    type_id: '5',
-    type_name: '爱情片'
-  },
-  {
-    api: 'https://wolongzyw.com/api.php/provide/vod',
-    name: '卧龙资源',
-    type_id: '49',
-    type_name: '爱情片'
-  },
-  {
-    api: 'https://jszyapi.com/api.php/provide/vod',
-    name: '极速资源',
-    type_id: '8',
-    type_name: '爱情片'
-  },
+  }
 ];
 
 // 2. 渲染分类按钮
@@ -226,12 +202,10 @@ window.showDetail = showDetail;
 
 // 跳转到player.html播放，复用主站参数
 function playVideo(url, vod_name, episodeIndex, vodId, episodesArrStr) {
-  // episodesArrStr为JSON字符串，保证只encode一次
   let playerUrl = `player.html?url=${encodeURIComponent(url)}&title=${encodeURIComponent(decodeURIComponent(vod_name))}&index=${episodeIndex}`;
   if (vodId) playerUrl += `&id=${vodId}`;
-  // 只在这里encode一次
-  if (episodesArrStr) playerUrl += `&episodes=${encodeURIComponent(episodesArrStr)}`;
-  window.location.href = playerUrl;
+  if (episodesArrStr) playerUrl += `&episodes=${episodesArrStr}`;
+  window.open(playerUrl, '_blank');
 }
 window.playVideo = playVideo;
 </script>
