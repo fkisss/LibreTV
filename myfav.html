@@ -93,7 +93,8 @@ const videoList = document.getElementById('video-list');
 async function fetchVideoList() {
   videoList.innerHTML = '<div class="text-center py-5">加载中...</div>';
   const {api, type_id} = myFavApis[currentIndex];
-  const url = `${api}?ac=videolist&t=${type_id}&pg=1`;
+  // 通过主站后端代理接口请求，避免CORS
+  const url = `/api/search?customApi=${encodeURIComponent(api)}&t=${type_id}&pg=1`;
   try {
     const resp = await fetch(url);
     const data = await resp.json();
@@ -125,7 +126,8 @@ fetchVideoList();
 let detailModal = new bootstrap.Modal(document.getElementById('detailModal'));
 async function showDetail(id, name) {
   const {api} = myFavApis[currentIndex];
-  const url = `${api}?ac=videolist&ids=${id}`;
+  // 通过主站后端代理接口请求详情，避免CORS
+  const url = `/api/detail?id=${id}&customApi=${encodeURIComponent(api)}`;
   try {
     document.getElementById('modalTitle').textContent = decodeURIComponent(name);
     document.getElementById('modalPlayer').innerHTML = '';
