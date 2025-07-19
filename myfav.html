@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的自定义收藏 - LibreTV</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <style>
+        body { background: #f7f7f7; }
+        .video-card { cursor: pointer; transition: box-shadow .2s; }
+        .video-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+        .video-thumb { width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: 8px; }
+        .category-btn.active { background: #23ade5; color: #fff; }
+        .modal-lg { max-width: 900px; }
+        .artplayer-app { width: 100% !important; height: 480px !important; }
+    </style>
+</head>
+<body>
+<div class="container py-4">
+    <h2 class="mb-4">我的自定义收藏</h2>
+    <div class="mb-3" id="category-bar"></div>
+    <div id="video-list" class="row g-3"></div>
+</div>
+
+<!-- 详情弹窗 -->
+<div class="modal fade" id="detailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalTitle"></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row">
+          <div class="col-md-4">
+            <img id="modalCover" src="" alt="封面" class="img-fluid rounded mb-2">
+            <div class="text-muted small" id="modalType"></div>
+            <div class="text-muted small" id="modalYear"></div>
+            <div class="text-muted small" id="modalArea"></div>
+            <div class="text-muted small" id="modalDirector"></div>
+            <div class="text-muted small" id="modalActor"></div>
+            <div class="text-muted small" id="modalRemarks"></div>
+          </div>
+          <div class="col-md-8">
+            <div id="modalDesc" class="mb-2" style="max-height:120px;overflow:auto;"></div>
+            <div id="modalEpisodes" class="mb-2"></div>
+            <div id="modalPlayer"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.min.css">
+<script>
+// 1. 配置你喜欢的接口和分类
+const myFavApis = [
+  {
+    api: 'https://cj.rycjapi.com/api.php/provide/vod',
+    name: '如意资源',
+    type_id: '47',
+    type_name: '动画电影'
+  },
+  {
+    api: 'https://bfzyapi.com/api.php/provide/vod',
+    name: '暴风资源',
+    type_id: '25',
+    type_name: '爱情片'
+  }
+];
+
+// 2. 渲染分类按钮
+const categoryBar = document.getElementById('category-bar');
+let currentIndex = 0;
+function renderCategoryBar() {
+  categoryBar.innerHTML = myFavApis.map((item, idx) =>
+    `<button class="btn btn-sm me-2 mb-2 category-btn${idx===currentIndex?' active':''}" onclick="switchCategory(${idx})">${item.name} - ${item.type_name}</button>`
+  ).join('');
+}
+function switchCategory(idx) {
+  currentIndex = idx;
+  renderCategoryBar();
+  fetchVideoList();
+}
+window.switchCategory = switchCategory;
+renderCategoryBar();
+
+// 3. 拉取并渲染视频列表
+const videoList = document.getElementById('video-list');
+async function fetchVideoList() {
+  videoList.innerHTML = '<div class="text-center py-5">加载中...</div>';
+  const {api, type_id} = myFavApis[currentIndex];
+  const url = `${api}?ac=videolist&t=${type_id}&pg=1`;
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (!data.list || !Array.isArray(data.list)) throw new Error('无数据');
+    renderVideoList(data.list);
+  } catch (e) {
+    videoList.innerHTML = `<div class="text-danger text-center py-5">加载失败：${e.message}</div>`;
+  }
+}
+function renderVideoList(list) {
+  if (!list.length) {
+    videoList.innerHTML = '<div class="text-center py-5">暂无数据</div>';
+    return;
+  }
+  videoList.innerHTML = list.map(item => `
+    <div class="col-6 col-md-3">
+      <div class="card video-card h-100" onclick="showDetail('${item.vod_id}','${encodeURIComponent(item.vod_name)}')">
+        <img src="${item.vod_pic}" class="video-thumb card-img-top" alt="${item.vod_name}">
+        <div class="card-body p-2">
+          <div class="card-title mb-0 text-truncate" title="${item.vod_name}">${item.vod_name}</div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+fetchVideoList();
+
+// 4. 详情弹窗与播放
+let detailModal = new bootstrap.Modal(document.getElementById('detailModal'));
+async function showDetail(id, name) {
+  const {api} = myFavApis[currentIndex];
+  const url = `${api}?ac=videolist&ids=${id}`;
+  try {
+    document.getElementById('modalTitle').textContent = decodeURIComponent(name);
+    document.getElementById('modalPlayer').innerHTML = '';
+    document.getElementById('modalEpisodes').innerHTML = '';
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (!data.list || !data.list.length) throw new Error('无详情');
+    const info = data.list[0];
+    // 填充详情
+    document.getElementById('modalCover').src = info.vod_pic;
+    document.getElementById('modalType').textContent = '类型：' + (info.type_name||'');
+    document.getElementById('modalYear').textContent = '年份：' + (info.vod_year||'');
+    document.getElementById('modalArea').textContent = '地区：' + (info.vod_area||'');
+    document.getElementById('modalDirector').textContent = '导演：' + (info.vod_director||'');
+    document.getElementById('modalActor').textContent = '主演：' + (info.vod_actor||'');
+    document.getElementById('modalRemarks').textContent = '备注：' + (info.vod_remarks||'');
+    document.getElementById('modalDesc').textContent = info.vod_content||'';
+    // 解析播放地址
+    let playList = [];
+    if (info.vod_play_url) {
+      // 兼容多源，取第一个播放源
+      let mainSource = info.vod_play_url.split('$$$')[0];
+      playList = mainSource.split('#').map(ep => {
+        let [epName, epUrl] = ep.split('$');
+        return {name: epName||'播放', url: epUrl};
+      }).filter(ep => ep.url && (ep.url.startsWith('http://')||ep.url.startsWith('https://')));
+    }
+    if (!playList.length) {
+      document.getElementById('modalEpisodes').innerHTML = '<div class="text-danger">未找到播放地址</div>';
+      detailModal.show();
+      return;
+    }
+    // 渲染集数
+    document.getElementById('modalEpisodes').innerHTML = playList.map((ep, idx) =>
+      `<button class="btn btn-outline-primary btn-sm me-2 mb-2" onclick="playInModal('${ep.url.replace(/'/g,'%27')}', '${encodeURIComponent(info.vod_name)}', ${idx})">${ep.name||('第'+(idx+1)+'集')}</button>`
+    ).join('');
+    // 默认加载第一个
+    playInModal(playList[0].url, encodeURIComponent(info.vod_name), 0, playList);
+    detailModal.show();
+  } catch (e) {
+    document.getElementById('modalPlayer').innerHTML = `<div class='text-danger'>加载失败：${e.message}</div>`;
+    detailModal.show();
+  }
+}
+window.showDetail = showDetail;
+
+// 5. 播放器
+let art = null;
+function playInModal(url, title, idx, playList) {
+  document.getElementById('modalPlayer').innerHTML = `<div id='player' class='mb-2'></div>`;
+  if (art) { art.destroy(); art = null; }
+  art = new Artplayer({
+    container: '#player',
+    url: url,
+    title: decodeURIComponent(title),
+    type: url.endsWith('.m3u8') ? 'm3u8' : 'auto',
+    autoplay: true,
+    fullscreen: true,
+    setting: true,
+    playbackRate: true,
+    screenshot: true,
+    pip: true,
+    airplay: true,
+    moreVideoAttr: {crossOrigin: 'anonymous'},
+  });
+}
+window.playInModal = playInModal;
+</script>
+</body>
+</html> 
