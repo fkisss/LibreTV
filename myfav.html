@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>我的电影收藏 - LibreTV</title>
+    <title>好电影收藏 - LibreTV</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
     <style>
         body { background: #f7f7f7; }
@@ -17,7 +17,7 @@
 </head>
 <body>
 <div class="container py-4">
-    <h2 class="mb-4">电影收藏</h2>
+    <h2 class="mb-4">好电影收藏</h2>
     <div class="mb-3" id="category-bar"></div>
     <div id="video-list" class="row g-3"></div>
 </div>
@@ -69,7 +69,13 @@ const myFavApis = [
     name: '暴风资源',
     type_id: '25',
     type_name: '爱情片'
-  }
+  };
+  {
+    api: 'http://caiji.dyttzyapi.com/api.php/provide/vod',
+    name: '电影天堂',
+    type_id: '34',
+    type_name: '爱情片'
+  };
 ];
 
 // 2. 渲染分类按钮
@@ -80,29 +86,32 @@ function renderCategoryBar() {
     `<button class="btn btn-sm me-2 mb-2 category-btn${idx===currentIndex?' active':''}" onclick="switchCategory(${idx})">${item.name} - ${item.type_name}</button>`
   ).join('');
 }
-function switchCategory(idx) {
-  currentIndex = idx;
-  renderCategoryBar();
-  fetchVideoList();
-}
-window.switchCategory = switchCategory;
-renderCategoryBar();
+
+// 分页相关全局变量
+let currentPage = 1;
+let totalPage = 1;
 
 // 3. 拉取并渲染视频列表
 const videoList = document.getElementById('video-list');
-async function fetchVideoList() {
+const paginationBar = document.createElement('div');
+paginationBar.className = 'd-flex justify-content-center align-items-center my-3';
+videoList.parentNode.insertBefore(paginationBar, videoList.nextSibling);
+
+async function fetchVideoList(page = 1) {
   videoList.innerHTML = '<div class="text-center py-5">加载中...</div>';
   const {api, type_id} = myFavApis[currentIndex];
-  // 用 Cloudflare Worker 代理，支持自定义API+分类
-  const realUrl = `${api}?ac=videolist&t=${type_id}&pg=1`;
+  const realUrl = `${api}?ac=videolist&t=${type_id}&pg=${page}`;
   const url = `https://myfavmovie.fkiss.workers.dev/proxy/?url=${encodeURIComponent(realUrl)}`;
   try {
     const resp = await fetch(url);
     const data = await resp.json();
     if (!data.list || !Array.isArray(data.list)) throw new Error('无数据');
+    totalPage = data.pagecount || 1;
     renderVideoList(data.list);
+    renderPaginationBar();
   } catch (e) {
     videoList.innerHTML = `<div class="text-danger text-center py-5">加载失败：${e.message}</div>`;
+    paginationBar.innerHTML = '';
   }
 }
 function renderVideoList(list) {
@@ -110,24 +119,48 @@ function renderVideoList(list) {
     videoList.innerHTML = '<div class="text-center py-5">暂无数据</div>';
     return;
   }
-  videoList.innerHTML = list.map(item => `
+  videoList.innerHTML = list.map(item => {
+    // 兜底图片
+    const pic = item.vod_pic && item.vod_pic.startsWith('http') ? item.vod_pic : 'https://img1.imgtp.com/2023/07/21/0Qv6Qw2A.jpg';
+    return `
     <div class="col-6 col-md-3">
       <div class="card video-card h-100" onclick="showDetail('${item.vod_id}','${encodeURIComponent(item.vod_name)}')">
-        <img src="${item.vod_pic}" class="video-thumb card-img-top" alt="${item.vod_name}">
+        <img src="${pic}" class="video-thumb card-img-top" alt="${item.vod_name}">
         <div class="card-body p-2">
           <div class="card-title mb-0 text-truncate" title="${item.vod_name}">${item.vod_name}</div>
         </div>
       </div>
     </div>
-  `).join('');
+  `}).join('');
 }
-fetchVideoList();
+function renderPaginationBar() {
+  paginationBar.innerHTML = `
+    <button class="btn btn-outline-secondary btn-sm me-2" ${currentPage<=1?'disabled':''} onclick="gotoPage(${currentPage-1})">上一页</button>
+    <span class="mx-2">第 ${currentPage} / ${totalPage} 页</span>
+    <button class="btn btn-outline-secondary btn-sm ms-2" ${currentPage>=totalPage?'disabled':''} onclick="gotoPage(${currentPage+1})">下一页</button>
+  `;
+}
+window.gotoPage = function(page) {
+  if (page < 1 || page > totalPage) return;
+  currentPage = page;
+  fetchVideoList(currentPage);
+}
 
-// 4. 详情弹窗与播放
+// 分类切换时重置页码
+function switchCategory(idx) {
+  currentIndex = idx;
+  currentPage = 1;
+  renderCategoryBar();
+  fetchVideoList(currentPage);
+}
+window.switchCategory = switchCategory;
+renderCategoryBar();
+fetchVideoList(currentPage);
+
+// 4. 详情弹窗与播放（复用主站逻辑，跳转player.html）
 let detailModal = new bootstrap.Modal(document.getElementById('detailModal'));
 async function showDetail(id, name) {
   const {api} = myFavApis[currentIndex];
-  // 用 Cloudflare Worker 代理，支持自定义API+分类
   const realUrl = `${api}?ac=videolist&ids=${id}`;
   const url = `https://myfavmovie.fkiss.workers.dev/proxy/?url=${encodeURIComponent(realUrl)}`;
   try {
@@ -138,8 +171,7 @@ async function showDetail(id, name) {
     const data = await resp.json();
     if (!data.list || !data.list.length) throw new Error('无详情');
     const info = data.list[0];
-    // 填充详情
-    document.getElementById('modalCover').src = info.vod_pic;
+    document.getElementById('modalCover').src = info.vod_pic && info.vod_pic.startsWith('http') ? info.vod_pic : 'https://img1.imgtp.com/2023/07/21/0Qv6Qw2A.jpg';
     document.getElementById('modalType').textContent = '类型：' + (info.type_name||'');
     document.getElementById('modalYear').textContent = '年份：' + (info.vod_year||'');
     document.getElementById('modalArea').textContent = '地区：' + (info.vod_area||'');
@@ -147,10 +179,9 @@ async function showDetail(id, name) {
     document.getElementById('modalActor').textContent = '主演：' + (info.vod_actor||'');
     document.getElementById('modalRemarks').textContent = '备注：' + (info.vod_remarks||'');
     document.getElementById('modalDesc').textContent = info.vod_content||'';
-    // 解析播放地址
+    // 解析播放地址，复用主站逻辑
     let playList = [];
     if (info.vod_play_url) {
-      // 兼容多源，取第一个播放源
       let mainSource = info.vod_play_url.split('$$$')[0];
       playList = mainSource.split('#').map(ep => {
         let [epName, epUrl] = ep.split('$');
@@ -162,12 +193,11 @@ async function showDetail(id, name) {
       detailModal.show();
       return;
     }
-    // 渲染集数
+    // 渲染集数按钮，点击跳转player.html
     document.getElementById('modalEpisodes').innerHTML = playList.map((ep, idx) =>
-      `<button class="btn btn-outline-primary btn-sm me-2 mb-2" onclick="playInModal('${ep.url.replace(/'/g,'%27')}', '${encodeURIComponent(info.vod_name)}', ${idx})">${ep.name||('第'+(idx+1)+'集')}</button>`
+      `<button class="btn btn-outline-primary btn-sm me-2 mb-2" onclick="playVideo('${ep.url.replace(/'/g,'%27')}', '${encodeURIComponent(info.vod_name)}', ${idx}, '${id}', ${encodeURIComponent(JSON.stringify(playList.map(x=>x.url)))})">${ep.name||('第'+(idx+1)+'集')}</button>`
     ).join('');
     // 默认加载第一个
-    playInModal(playList[0].url, encodeURIComponent(info.vod_name), 0, playList);
     detailModal.show();
   } catch (e) {
     document.getElementById('modalPlayer').innerHTML = `<div class='text-danger'>加载失败：${e.message}</div>`;
@@ -176,27 +206,15 @@ async function showDetail(id, name) {
 }
 window.showDetail = showDetail;
 
-// 5. 播放器
-let art = null;
-function playInModal(url, title, idx, playList) {
-  document.getElementById('modalPlayer').innerHTML = `<div id='player' class='mb-2'></div>`;
-  if (art) { art.destroy(); art = null; }
-  art = new Artplayer({
-    container: '#player',
-    url: url,
-    title: decodeURIComponent(title),
-    type: url.endsWith('.m3u8') ? 'm3u8' : 'auto',
-    autoplay: true,
-    fullscreen: true,
-    setting: true,
-    playbackRate: true,
-    screenshot: true,
-    pip: true,
-    airplay: true,
-    moreVideoAttr: {crossOrigin: 'anonymous'},
-  });
+// 跳转到player.html播放，复用主站参数
+function playVideo(url, vod_name, episodeIndex, vodId, episodesArrStr) {
+  // 跳转到player.html，传递所有集数、当前集数索引、视频名等参数
+  let playerUrl = `player.html?url=${encodeURIComponent(url)}&title=${encodeURIComponent(decodeURIComponent(vod_name))}&index=${episodeIndex}`;
+  if (vodId) playerUrl += `&id=${vodId}`;
+  if (episodesArrStr) playerUrl += `&episodes=${encodeURIComponent(episodesArrStr)}`;
+  window.location.href = playerUrl;
 }
-window.playInModal = playInModal;
+window.playVideo = playVideo;
 </script>
 </body>
 </html> 
