@@ -59,10 +59,10 @@
 // 1. 配置你喜欢的接口和分类
 const myFavApis = [
   {
-    api: 'https://bfzyapi.com/api.php/provide/vod',
-    name: '暴风资源',
-    type_id: '25',
-    type_name: '爱情片'
+    api: 'https://tyyszy.com/api.php/provide/vod',
+    name: '天涯资源',
+    type_id: '23',
+    type_name: '动作片'
   },
   {
     api: 'http://caiji.dyttzyapi.com/api.php/provide/vod',
@@ -189,7 +189,7 @@ async function showDetail(id, name) {
     }
     // 渲染集数按钮，点击跳转player.html
     document.getElementById('modalEpisodes').innerHTML = playList.map((ep, idx) =>
-      `<button class="btn btn-outline-primary btn-sm me-2 mb-2" onclick="playVideo('${ep.url.replace(/'/g,'%27')}', '${encodeURIComponent(info.vod_name)}', ${idx}, '${id}', ${encodeURIComponent(JSON.stringify(playList.map(x=>x.url)))})">${ep.name||('第'+(idx+1)+'集')}</button>`
+      `<button class="btn btn-outline-primary btn-sm me-2 mb-2" onclick="playVideo('${ep.url.replace(/'/g,'%27')}', '${encodeURIComponent(info.vod_name)}', ${idx}, '${id}', '${encodeURIComponent(JSON.stringify(playList.map(x=>x.url)))}')">${ep.name||('第'+(idx+1)+'集')}</button>`
     ).join('');
     // 默认加载第一个
     detailModal.show();
